@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertrek - Martinus Airport</title>
+<style>
+  :root {
+    --c: min(1.36vw, 2.5vh);        /* breedte van 1 lettervakje */
+    --g: calc(var(--c) * .12);      /* ruimte tussen vakjes */
+    --yellow: #ffd23f;
+    --red: #ff5a3c;
+    --green: #5ee08a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #06080c;
+    color: #e9edf3;
+    font-family: Bahnschrift, 'DIN Alternate', 'Arial Narrow', Arial, sans-serif;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+  }
+  :fullscreen body, body:fullscreen { cursor: none; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: calc(var(--c) * .75) calc(var(--c) * 2.2);
+    background: var(--yellow); color: #111;
+  }
+  .brand { height: calc(var(--c) * 3.5); display: block; }
+  .title { font-size: calc(var(--c) * 2.6); font-weight: 700; letter-spacing: .08em; line-height: 1; display: flex; align-items: center; gap: .4em; }
+  .title small { font-size: .45em; font-weight: 400; letter-spacing: .2em; opacity: .7; }
+  .title svg { height: .95em; width: .95em; }
+  .clock { font-size: calc(var(--c) * 2.4); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+
+  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--c) * .45); }
+  .row { display: flex; gap: calc(var(--c) * 1.2); }
+  .col { display: flex; gap: var(--g); width: calc(var(--n) * (var(--c) + var(--g)) - var(--g)); }
+  .head .col { font-size: calc(var(--c) * .8); letter-spacing: .28em; color: #7c8798; text-transform: uppercase; padding-bottom: calc(var(--c) * .2); }
+
+  .cell {
+    width: var(--c); height: calc(var(--c) * 1.75);
+    display: grid; place-items: center;
+    font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+    font-size: calc(var(--c) * 1.18); font-weight: 700;
+    color: #f2f4f7;
+    background: linear-gradient(#1b2029 0 49%, #06080c 49% 53%, #151a22 53% 100%);
+    border-radius: calc(var(--c) * .12);
+    backface-visibility: hidden;
+  }
+  .tijd .cell, .gate .cell { color: var(--yellow); }
+  .status.ok .cell { color: var(--green); }
+  .status.weg .cell { color: #6d7786; }
+  .row.late .tijd .cell, .row.late .status .cell { color: var(--red); }
+
+  footer {
+    height: calc(var(--c) * 2.6); display: flex; align-items: center; overflow: hidden; white-space: nowrap;
+    background: #10141b; color: #9aa5b5;
+    font-size: calc(var(--c) * 1.05); letter-spacing: .2em; text-transform: uppercase;
+    transition: background .8s, color .8s;
+  }
+  footer span { display: inline-block; padding-left: 100vw; animation: ticker 32s linear infinite; }
+  @keyframes ticker { to { transform: translateX(-100%); } }
+  .alarm footer { background: var(--red); color: #160400; font-weight: 700; }
+  .hersteld footer { background: var(--green); color: #03170a; font-weight: 700; }
+
+  .server { position: fixed; right: 1.5vh; bottom: calc(var(--c) * 3); font-size: 1.6vh; color: #ff8a80; display: none; }
+  .offline .server { display: block; }
+</style>
+</head>
+<body>
+  <header>
+    <img class="brand" src="img/martinus-airport.png" alt="Martinus Airport">
+    <div class="title">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2.5 19h19v2h-19zM22.1 9.6c-.2-.8-1-1.3-1.8-1.1l-5.3 1.4-6.9-6.4-1.9.5 4.1 7.2-5 1.3-2-1.5-1.4.4 2.6 4.5 16.5-4.4c.8-.3 1.3-1.1 1.1-1.9z"/></svg>
+      VERTREK <small>DEPARTURES</small>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </header>
+
+  <main id="board"></main>
+
+  <footer><span id="ticker"></span></footer>
+  <div class="server">Geen contact met de server…</div>
+
+<script src="common.js"></script>
+<script>
+  // ===== HIER AANPASSEN =====
+  // De vluchten naar huis van de internationale reizigers (de leiding).
+  // Maximaal 12 regels; stad max 14 letters, land max 13 letters.
+  const FIRST_DEPARTURE = '13:00'; // de vlucht die iedereen moet halen
+  const MINUTES_BETWEEN = 0;       // 0 = alles om 13:00, 5 = 13:00, 13:05, 13:10...
+  const DEST = [
+    ['LONDEN', 'ENGELAND'], ['TOKIO', 'JAPAN'], ['NEW YORK', 'AMERIKA'], ['KAAPSTAD', 'ZUID-AFRIKA'],
+    ['PARIJS', 'FRANKRIJK'], ['SYDNEY', 'AUSTRALIE'], ['RIO DE JANEIRO', 'BRAZILIE'], ['REYKJAVIK', 'IJSLAND'],
+    ['ROME', 'ITALIE'], ['BANGKOK', 'THAILAND'], ['TORONTO', 'CANADA'], ['MARRAKECH', 'MAROKKO'],
+  ];
+  // ==========================
+
+  const ROW_STAGGER = 700;         // rijen klappen een voor een om
+  const GROW_EVERY = 45000;        // daarna loopt de vertraging verder op
+  const GROW_BY = 5;               // minuten per stap
+  const MAX_DELAY = 240;
+  const HERSTELD_MS = 90000;       // zo lang blijft de groene "hersteld"-balk staan
+  const COLS = [['tijd', 5, 'Tijd'], ['stad', 14, 'Bestemming'], ['land', 13, 'Land'], ['vlucht', 6, 'Vlucht'], ['gate', 3, 'Gate'], ['status', 14, 'Status']];
+  const FLAP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+  const TICKER_OK = 'Welkom op Martinus Airport  ✦  Houd uw vliegticket en paspoort gereed  ✦  Laat uw bagage niet onbeheerd achter  ✦  Wij wensen u een goede reis';
+  const TICKER_HERSTELD = 'Verbinding met de luchtverkeerstoren hersteld  ✦  Alle vluchten vertrekken weer op tijd  ✦  Bedankt voor jullie hulp  ✦  Goede reis naar huis';
+  const TICKER_ALARM = 'Storing  ✦  Geen verbinding met de luchtverkeerstoren  ✦  Alle vluchten zijn vertraagd  ✦  Blijf in de buurt van uw gate  ✦  Onze excuses voor het ongemak';
+
+  function hash(n) {
+    n = Math.imul(n ^ (n >>> 15), 0x2c1b3c6d);
+    n = Math.imul(n ^ (n >>> 12), 0x297a2d39);
+    return (n ^ (n >>> 15)) >>> 0;
+  }
+
+  // Vluchtnummer, gate en vertraging zijn op elk scherm hetzelfde.
+  const [h0, m0] = FIRST_DEPARTURE.split(':').map(Number);
+  const flights = DEST.slice(0, 12).map(([stad, land], i) => {
+    const h = hash(i + 41);
+    return {
+      sched: h0 * 60 + m0 + i * MINUTES_BETWEEN,   // minuten na middernacht
+      stad, land,
+      vlucht: (h % 4 ? 'MA' : 'SC') + ' ' + (100 + (h >>> 4) % 900),
+      gate: 'ABCDEF'[(h >>> 14) % 6] + String(1 + (h >>> 18) % 24).padStart(2, '0'),
+      baseDelay: 20 + (h >>> 24) % 9 * 5,
+    };
+  });
+  const ROWS = flights.length;
+
+  const hhmm = (min) => String(Math.floor(min / 60) % 24).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+
+  // Bord opbouwen: kopregel + rijen met losse lettervakjes.
+  const board = document.getElementById('board');
+  const head = document.createElement('div');
+  head.className = 'row head';
+  for (const [name, n, label] of COLS) {
+    const c = document.createElement('div');
+    c.className = 'col ' + name;
+    c.style.setProperty('--n', n);
+    c.textContent = label;
+    head.appendChild(c);
+  }
+  board.appendChild(head);
+
+  const rows = [];
+  for (let i = 0; i < ROWS; i++) {
+    const el = document.createElement('div');
+    el.className = 'row';
+    const cols = {};
+    for (const [name, n] of COLS) {
+      const c = document.createElement('div');
+      c.className = 'col ' + name;
+      c.style.setProperty('--n', n);
+      const cells = [];
+      for (let j = 0; j < n; j++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.textContent = ' ';
+        c.appendChild(cell);
+        cells.push(cell);
+      }
+      el.appendChild(c);
+      cols[name] = { el: c, cells };
+    }
+    board.appendChild(el);
+    rows.push({ el, cols });
+  }
+
+  // Een vakje "klappert" door een paar willekeurige tekens naar het nieuwe teken.
+  function setChar(cell, ch, delay) {
+    if (cell.target === ch) return;
+    cell.target = ch;
+    clearTimeout(cell.timer);
+    let spins = 3 + Math.floor(Math.random() * 6);
+    const step = () => {
+      const last = spins-- <= 0;
+      cell.textContent = last ? ch : FLAP[Math.floor(Math.random() * FLAP.length)];
+      cell.animate([{ transform: 'rotateX(-80deg)', filter: 'brightness(.5)' }, { transform: 'none', filter: 'none' }], { duration: 55 });
+      if (!last) cell.timer = setTimeout(step, 55);
+    };
+    cell.timer = setTimeout(step, delay);
+  }
+
+  function setText(col, text) {
+    const padded = text.padEnd(col.cells.length).slice(0, col.cells.length);
+    col.cells.forEach((cell, j) => setChar(cell, padded[j], j * 18));
+  }
+
+  const clockEl = document.getElementById('clock');
+  const tickerEl = document.getElementById('ticker');
+  tickerEl.textContent = TICKER_OK;
+
+  function render() {
+    const st = Airport.state;
+    const t = Airport.now();
+    clockEl.textContent = new Date(t).toLocaleTimeString('nl-NL');
+
+    // Zodra het signaal helemaal weg is (tZero) klappen de rijen een voor een
+    // om naar "vertraagd". Na het herstel klappen ze een voor een weer terug.
+    const tZero = st.connected ? Infinity : st.lostAt + st.fadeMs;
+    const alarm = t >= tZero;
+    const hersteld = st.connected && st.restoredAt > 0 && t < st.restoredAt + HERSTELD_MS;
+    const mode = alarm ? 'alarm' : hersteld ? 'hersteld' : 'ok';
+    if (document.body.dataset.mode !== mode) {
+      document.body.dataset.mode = mode;
+      document.body.classList.toggle('alarm', alarm);
+      document.body.classList.toggle('hersteld', hersteld);
+      tickerEl.textContent = alarm ? TICKER_ALARM : hersteld ? TICKER_HERSTELD : TICKER_OK;
+    }
+
+    rows.forEach((row, i) => {
+      const f = flights[i];
+      const flipAt = tZero + i * ROW_STAGGER;
+      const late = t >= flipAt;
+      let time = f.sched, status = 'OP TIJD', tone = 'ok';
+
+      if (late) {
+        const delay = Math.min(MAX_DELAY, f.baseDelay + Math.floor((t - flipAt) / GROW_EVERY) * GROW_BY);
+        time = f.sched + delay;
+        status = 'VERTRAAGD +' + delay;
+        tone = '';
+        row.held = true;
+      } else if (row.held && st.connected && t < st.restoredAt + 2500 + i * ROW_STAGGER) {
+        return; // wacht op zijn beurt om terug te klappen
+      } else {
+        row.held = false;
+      }
+
+      row.el.classList.toggle('late', late);
+      row.cols.status.el.className = 'col status ' + tone;
+      setText(row.cols.tijd, hhmm(time));
+      setText(row.cols.stad, f.stad);
+      setText(row.cols.land, f.land);
+      setText(row.cols.vlucht, f.vlucht);
+      setText(row.cols.gate, f.gate);
+      setText(row.cols.status, status);
+    });
+  }
+
+  Airport.connect('vluchten', render);
+  Airport.fullscreenOnClick();
+  setInterval(render, 250);
+</script>
+</body>
+</html>

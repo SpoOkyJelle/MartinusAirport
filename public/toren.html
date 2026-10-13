@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toren - Martinus Airport</title>
+<style>
+  :root { --sig: hsl(150 85% 55%); --bg: #05080f; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% 45%, #0c1626 0%, var(--bg) 70%);
+    color: #dfe7f2;
+    font-family: Bahnschrift, 'DIN Alternate', 'Arial Narrow', Arial, sans-serif;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    justify-items: center;
+    text-align: center;
+    user-select: none;
+  }
+  :fullscreen body, body:fullscreen { cursor: none; }
+
+  header { padding-top: 4vh; letter-spacing: .45em; font-size: 2.2vh; color: #7f8da3; text-transform: uppercase; }
+  header b { display: block; margin-top: .8vh; font-size: 3.4vh; letter-spacing: .3em; color: #dfe7f2; font-weight: 600; }
+
+  /* Logo in het wit, zodat het leesbaar is op de donkere achtergrond. */
+  .logo { position: fixed; top: 3.5vh; left: 3.5vh; height: 10vh; filter: brightness(0) invert(1); opacity: .92; }
+
+  .icon { min-height: 0; width: 100%; display: grid; place-items: center; }
+  svg { height: 100%; max-height: 56vh; max-width: 92vw; overflow: visible; filter: drop-shadow(0 0 2.2vh color-mix(in srgb, var(--sig) 55%, transparent)); }
+  .arc { fill: none; stroke: var(--sig); stroke-width: 15; stroke-linecap: round; }
+  .mast { fill: none; stroke: var(--sig); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+  .dot { fill: var(--sig); }
+  .slash { stroke: #ff3b30; stroke-width: 20; stroke-linecap: round; opacity: 0; transition: opacity .6s; }
+  .dead .slash { opacity: 1; }
+  .dead svg { animation: alarm 1.1s steps(2, jump-none) infinite; }
+  @keyframes alarm { 50% { opacity: .45; } }
+
+  .status { font-size: 8.5vh; font-weight: 700; letter-spacing: .12em; color: var(--sig); line-height: 1; text-shadow: 0 0 3vh color-mix(in srgb, var(--sig) 50%, transparent); }
+  .sub { margin-top: 1.6vh; font-size: 2.6vh; letter-spacing: .3em; color: #7f8da3; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+  canvas { width: 100%; height: 13vh; display: block; margin-top: 1vh; }
+
+  .server { position: fixed; left: 1.5vh; bottom: 1.5vh; font-size: 1.6vh; letter-spacing: .1em; color: #ff8a80; display: none; }
+  .offline .server { display: block; }
+</style>
+</head>
+<body>
+  <img class="logo" src="img/martinus-airport.png" alt="Martinus Airport">
+  <header>Verbinding met<b>Luchtverkeerstoren</b></header>
+
+  <div class="icon">
+    <svg viewBox="0 0 400 380" aria-hidden="true">
+      <g id="arcs"></g>
+      <path class="mast" d="M200 205 L150 365 M200 205 L250 365 M168 308 L232 308 M184 256 L216 256 M168 308 L216 256 M232 308 L184 256 M130 365 L270 365"/>
+      <circle class="dot" cx="200" cy="190" r="17"/>
+      <line class="slash" x1="55" y1="35" x2="345" y2="345"/>
+    </svg>
+  </div>
+
+  <div>
+    <div class="status" id="status">VERBONDEN</div>
+    <div class="sub" id="sub">Signaalsterkte 100%</div>
+  </div>
+  <canvas id="wave"></canvas>
+  <div class="server">Geen contact met de server…</div>
+
+<script src="common.js"></script>
+<script>
+  const ARCS = 4;
+  const arcsEl = document.getElementById('arcs');
+  const statusEl = document.getElementById('status');
+  const subEl = document.getElementById('sub');
+  const canvas = document.getElementById('wave');
+  const ctx = canvas.getContext('2d');
+
+  // Bogen links en rechts van de antenne, van binnen (1) naar buiten (4).
+  const arcs = [];
+  for (let n = 1; n <= ARCS; n++) {
+    const r = 42 + n * 37, a = 42 * Math.PI / 180;
+    const dx = r * Math.cos(a), dy = r * Math.sin(a);
+    const d = `M${200 + dx} ${190 - dy} A${r} ${r} 0 0 1 ${200 + dx} ${190 + dy} ` +
+              `M${200 - dx} ${190 - dy} A${r} ${r} 0 0 0 ${200 - dx} ${190 + dy}`;
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('class', 'arc');
+    p.setAttribute('d', d);
+    arcsEl.appendChild(p);
+    arcs.push(p);
+  }
+
+  const noise = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+
+  function resize() {
+    canvas.width = canvas.clientWidth * devicePixelRatio;
+    canvas.height = canvas.clientHeight * devicePixelRatio;
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  function frame() {
+    const t = Airport.now();
+    const s = Airport.strength(t);
+    const tick = Math.floor(t / 70);
+
+    // Kleur loopt van groen via oranje naar rood.
+    const hue = 150 * Math.pow(Math.max(0, (s - 0.15) / 0.85), 1.6);
+    document.documentElement.style.setProperty('--sig', `hsl(${hue} 88% 55%)`);
+
+    // Elke boog valt op zijn eigen moment uit, en flikkert vlak daarvoor.
+    arcs.forEach((p, i) => {
+      const threshold = i / ARCS;
+      const margin = (s - threshold) / 0.12;
+      let o;
+      if (s <= 0 || margin <= 0) o = 0.07;
+      else if (margin >= 1) o = 1;
+      else o = noise(tick + i * 977) < 0.15 + margin * 0.75 ? 1 : 0.12;
+      p.style.opacity = o;
+    });
+
+    document.body.classList.toggle('dead', s <= 0);
+    const st = Airport.state;
+    const hersteld = st.restoredAt > 0 && t < st.restoredAt + 90000;
+    statusEl.textContent = s >= 1 ? (hersteld ? 'VERBINDING HERSTELD' : 'VERBONDEN') : s > 0.5 ? 'SIGNAAL VERZWAKT' : s > 0 ? 'SIGNAAL KRITIEK' : 'VERBINDING VERBROKEN';
+    const wobble = s > 0 && s < 1 ? (noise(Math.floor(t / 300)) - 0.5) * 6 : 0;
+    subEl.textContent = 'Signaalsterkte ' + Math.max(s > 0 ? 1 : 0, Math.min(100, Math.round(s * 100 + wobble))) + '%';
+
+    // Golflijn onderin: wordt rommeliger en eindigt als vlakke lijn.
+    const w = canvas.width, h = canvas.height, mid = h / 2;
+    ctx.clearRect(0, 0, w, h);
+    ctx.lineWidth = Math.max(2, h * 0.025);
+    ctx.strokeStyle = `hsl(${hue} 88% 55%)`;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = h * 0.12;
+    ctx.beginPath();
+    const step = Math.max(3, w / 400);
+    for (let x = 0; x <= w; x += step) {
+      const u = x / w * 40;
+      const clean = Math.sin(u + t * 0.004) * 0.6 + Math.sin(u * 2.7 - t * 0.0065) * 0.3;
+      const rough = (noise(Math.floor(x / step) + tick * 31) - 0.5) * 2;
+      const y = mid + h * 0.38 * s * (clean + rough * (1 - s) * 1.2);
+      x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+
+    requestAnimationFrame(frame);
+  }
+
+  Airport.connect('toren');
+  Airport.fullscreenOnClick();
+  frame();
+</script>
+</body>
+</html>
