@@ -39,13 +39,16 @@ Staan de schermen op een ander apparaat? Zorg dat het op hetzelfde netwerk zit e
 1. Kies hoe lang het wegvallen duurt (5 seconden tot 2 minuten).
 2. Druk op **Verbreek verbinding**. Op de toren verzwakt het signaal van groen via oranje naar rood.
 3. Staat het signaal op 0%, dan raken de vluchten vertraagd. De vertraging loopt daarna elke 45 seconden met 5 minuten op.
-4. Druk op **Herstel verbinding** om alles terug te zetten. De schermen laten nog anderhalve minuut zien dat de verbinding hersteld is.
+4. Op de toren verschijnt nu een radio waarop de kinderen de **noodfrequentie** moeten invullen, met het toetsenbord of door op de knoppen te klikken. Is de frequentie juist, dan wordt de verbinding hersteld; bij een foute frequentie kunnen ze het opnieuw proberen.
+5. Lukt het niet, druk dan zelf op **Herstel verbinding** om alles terug te zetten. De schermen laten nog anderhalve minuut zien dat de verbinding hersteld is.
 
 Het paneel toont ook hoeveel schermen er meekijken, zodat je vooraf kunt zien of alles is aangesloten.
 
 <br clear="right">
 
 ## Aanpassen
+
+De noodfrequentie staat bovenaan [`server.js`](server.js) en is standaard `121.500`, de echte noodfrequentie in de luchtvaart. Gebruik altijd drie cijfers, een punt en drie cijfers. Het bedieningspaneel laat zien welke frequentie goed is.
 
 De vluchten staan bovenaan het script in [`public/vluchten.html`](public/vluchten.html), tussen `HIER AANPASSEN` en de streep eronder:
 

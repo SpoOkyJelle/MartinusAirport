@@ -13,12 +13,11 @@
     color: #dfe7f2;
     font-family: Bahnschrift, 'DIN Alternate', 'Arial Narrow', Arial, sans-serif;
     overflow: hidden;
-    display: grid;
-    grid-template-rows: auto 1fr auto auto;
-    justify-items: center;
+    display: flex;
     text-align: center;
     user-select: none;
   }
+  main { flex: 1; min-width: 0; display: grid; grid-template-rows: auto 1fr auto auto; justify-items: center; }
   :fullscreen body, body:fullscreen { cursor: none; }
 
   header { padding-top: 4vh; letter-spacing: .45em; font-size: 2.2vh; color: #7f8da3; text-transform: uppercase; }
@@ -37,9 +36,48 @@
   .dead svg { animation: alarm 1.1s steps(2, jump-none) infinite; }
   @keyframes alarm { 50% { opacity: .45; } }
 
-  .status { font-size: 8.5vh; font-weight: 700; letter-spacing: .12em; color: var(--sig); line-height: 1; text-shadow: 0 0 3vh color-mix(in srgb, var(--sig) 50%, transparent); }
+  .status { transition: font-size 1s cubic-bezier(.2, .8, .2, 1); font-size: 8.5vh; font-weight: 700; letter-spacing: .12em; color: var(--sig); line-height: 1; text-shadow: 0 0 3vh color-mix(in srgb, var(--sig) 50%, transparent); }
   .sub { margin-top: 1.6vh; font-size: 2.6vh; letter-spacing: .3em; color: #7f8da3; text-transform: uppercase; font-variant-numeric: tabular-nums; }
   canvas { width: 100%; height: 13vh; display: block; margin-top: 1vh; }
+
+  /* Radio voor de noodfrequentie: schuift in beeld zodra de verbinding verbroken is.
+     De strook wordt breder (de toren schuift opzij) en het paneel glijdt van rechts naar binnen. */
+  :root { --lcd: #ffb020; --glij: cubic-bezier(.2, .8, .2, 1); }
+  .radio-strook { flex: none; width: 0; overflow: hidden; display: flex; align-items: center; transition: width 1s var(--glij); }
+  .radio-aan .radio-strook { width: 59vh; }
+  .radio {
+    display: flex; flex: none; flex-direction: column; gap: 2.2vh;
+    width: 48vh; margin: 0 5vh 0 6vh; padding: 3.5vh;
+    border: .3vh solid #2a3446; border-radius: 2vh;
+    background: linear-gradient(#121b2b, #0a101b); box-shadow: 0 0 6vh #000c;
+    cursor: auto;
+    opacity: 0; transform: translateX(20vh);
+    transition: transform 1s var(--glij), opacity .5s;
+  }
+  .radio-aan .radio { opacity: 1; transform: none; transition: transform 1s var(--glij) .15s, opacity .6s .15s; }
+  .radio-aan .status { font-size: 6.5vh; }
+  .radio h2 { font-size: 3.2vh; letter-spacing: .3em; color: var(--lcd); }
+  .radio p { font-size: 2vh; line-height: 1.4; letter-spacing: .05em; color: #9aa7ba; }
+  .lcd {
+    display: flex; justify-content: center; align-items: baseline; gap: .5vh;
+    padding: 1.8vh 1vh; border: .3vh solid #4a3808; border-radius: 1.2vh; background: #171104;
+    font: 700 6.5vh Consolas, 'Courier New', monospace; color: var(--lcd); text-shadow: 0 0 1.5vh color-mix(in srgb, var(--lcd) 55%, transparent);
+  }
+  .lcd span { width: 1ch; }
+  .lcd .leeg { opacity: .2; }
+  .lcd small { font-size: 2.2vh; margin-left: 1.2vh; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2vh; }
+  .keys button {
+    font: 700 3.6vh Bahnschrift, 'Arial Narrow', Arial, sans-serif; padding: 1.5vh 0; cursor: pointer;
+    border: .25vh solid #2a3446; border-radius: 1.2vh; background: #172235; color: #dfe7f2;
+  }
+  .keys button:active { background: #24365a; }
+  .keys .ok { background: var(--lcd); border-color: transparent; color: #1a1000; }
+  .melding { min-height: 1.3em; font-size: 2.4vh; font-weight: 700; letter-spacing: .15em; color: var(--lcd); }
+  .fout { --lcd: #ff3b30; }
+  .fout .lcd { animation: schud .45s; }
+  @keyframes schud { 20%, 60% { transform: translateX(-1.2vh); } 40%, 80% { transform: translateX(1.2vh); } }
+  .goed { --lcd: hsl(150 85% 55%); }
 
   .server { position: fixed; left: 1.5vh; bottom: 1.5vh; font-size: 1.6vh; letter-spacing: .1em; color: #ff8a80; display: none; }
   .offline .server { display: block; }
@@ -47,6 +85,7 @@
 </head>
 <body>
   <img class="logo" src="img/martinus-airport.png" alt="Martinus Airport">
+  <main>
   <header>Verbinding met<b>Luchtverkeerstoren</b></header>
 
   <div class="icon">
@@ -63,6 +102,22 @@
     <div class="sub" id="sub">Signaalsterkte 100%</div>
   </div>
   <canvas id="wave"></canvas>
+  </main>
+
+  <div class="radio-strook">
+  <aside class="radio" id="radio" data-no-fullscreen>
+    <h2>NOODFREQUENTIE</h2>
+    <p>Stel de radio af op de noodfrequentie om de verbinding met de toren te herstellen.</p>
+    <div class="lcd" id="lcd"></div>
+    <div class="keys" id="keys">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="wis">⌫</button><button data-k="0">0</button><button data-k="ok" class="ok">OK</button>
+    </div>
+    <div class="melding" id="melding"></div>
+  </aside>
+  </div>
   <div class="server">Geen contact met de server…</div>
 
 <script src="common.js"></script>
@@ -91,8 +146,8 @@
   const noise = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
 
   function resize() {
-    canvas.width = canvas.clientWidth * devicePixelRatio;
-    canvas.height = canvas.clientHeight * devicePixelRatio;
+    canvas.width = Math.round(canvas.clientWidth * devicePixelRatio);
+    canvas.height = Math.round(canvas.clientHeight * devicePixelRatio);
   }
   addEventListener('resize', resize);
   resize();
@@ -118,6 +173,7 @@
     });
 
     document.body.classList.toggle('dead', s <= 0);
+    radioFrame(s <= 0 && !Airport.state.connected);
     const st = Airport.state;
     const hersteld = st.restoredAt > 0 && t < st.restoredAt + 90000;
     statusEl.textContent = s >= 1 ? (hersteld ? 'VERBINDING HERSTELD' : 'VERBONDEN') : s > 0.5 ? 'SIGNAAL VERZWAKT' : s > 0 ? 'SIGNAAL KRITIEK' : 'VERBINDING VERBROKEN';
@@ -125,6 +181,8 @@
     subEl.textContent = 'Signaalsterkte ' + Math.max(s > 0 ? 1 : 0, Math.min(100, Math.round(s * 100 + wobble))) + '%';
 
     // Golflijn onderin: wordt rommeliger en eindigt als vlakke lijn.
+    // Breedte volgt de toren mee terwijl het radiopaneel in- of uitschuift.
+    if (canvas.width !== Math.round(canvas.clientWidth * devicePixelRatio)) resize();
     const w = canvas.width, h = canvas.height, mid = h / 2;
     ctx.clearRect(0, 0, w, h);
     ctx.lineWidth = Math.max(2, h * 0.025);
@@ -144,6 +202,78 @@
 
     requestAnimationFrame(frame);
   }
+
+  // Noodfrequentie invoeren: drie cijfers, punt, drie cijfers (bijv. 121.500).
+  const DIGITS = 6;
+  const radio = document.getElementById('radio');
+  const lcd = document.getElementById('lcd');
+  const meldingEl = document.getElementById('melding');
+  let invoer = '', bezig = false, aanTot = 0, wasAan = false;
+
+  function toonInvoer() {
+    let html = '';
+    for (let i = 0; i < DIGITS; i++) {
+      if (i === 3) html += '<span>.</span>';
+      html += invoer[i] ? `<span>${invoer[i]}</span>` : '<span class="leeg">0</span>';
+    }
+    lcd.innerHTML = html + '<small>MHz</small>';
+  }
+
+  function resetRadio() {
+    invoer = ''; bezig = false;
+    radio.classList.remove('fout', 'goed');
+    meldingEl.textContent = '';
+    toonInvoer();
+  }
+
+  // Paneel blijft na een goede frequentie nog even staan, zodat je het groen ziet.
+  function radioFrame(verbroken) {
+    const aan = verbroken || Date.now() < aanTot;
+    if (aan !== wasAan) { resetRadio(); wasAan = aan; }
+    document.body.classList.toggle('radio-aan', aan);
+  }
+
+  async function controleer() {
+    if (invoer.length < DIGITS) { meldingEl.textContent = 'VUL ALLE CIJFERS IN'; return; }
+    bezig = true;
+    meldingEl.textContent = 'AFSTEMMEN…';
+    let ok;
+    try {
+      const res = await fetch('/api/frequentie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frequentie: invoer }) });
+      ok = (await res.json()).ok;
+    } catch {
+      meldingEl.textContent = 'GEEN CONTACT MET SERVER';
+      bezig = false;
+      return;
+    }
+    if (ok) {
+      aanTot = Date.now() + 3000;
+      radio.classList.add('goed');
+      meldingEl.textContent = 'VERBINDING GEMAAKT';
+    } else {
+      radio.classList.add('fout');
+      meldingEl.textContent = 'ONJUISTE FREQUENTIE';
+      setTimeout(() => { if (radio.classList.contains('fout')) resetRadio(); }, 1800);
+    }
+  }
+
+  function toets(k) {
+    if (bezig || !wasAan) return;
+    if (/^\d$/.test(k)) { if (invoer.length < DIGITS) invoer += k; meldingEl.textContent = ''; }
+    else if (k === 'wis') invoer = invoer.slice(0, -1);
+    else if (k === 'ok') controleer();
+    toonInvoer();
+  }
+
+  document.getElementById('keys').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b) { toets(b.dataset.k); b.blur(); }
+  });
+  addEventListener('keydown', (e) => {
+    const k = /^\d$/.test(e.key) ? e.key : e.key === 'Backspace' ? 'wis' : e.key === 'Enter' ? 'ok' : null;
+    if (k) { e.preventDefault(); toets(k); }
+  });
+  toonInvoer();
 
   Airport.connect('toren');
   Airport.fullscreenOnClick();

@@ -75,6 +75,7 @@
     </label>
     <button id="verbreek">Verbreek verbinding</button>
     <button id="herstel" disabled>Herstel verbinding</button>
+    <p class="hint">De kinderen herstellen de verbinding door op de toren de noodfrequentie <b id="freq"></b> MHz in te vullen.</p>
   </section>
 
   <section>
@@ -98,6 +99,7 @@
   function onState(st) {
     $('verbreek').disabled = !st.connected;
     $('herstel').disabled = st.connected;
+    $('freq').textContent = st.frequentie;
     for (const role of ['toren', 'vluchten']) {
       const n = st.screens[role] || 0;
       const el = $('n-' + role);
@@ -125,7 +127,7 @@
       $('hint').textContent = 'Nog ' + Math.ceil((st.lostAt + st.fadeMs - t) / 1000) + ' s tot de vluchten vertraagd raken.';
     } else {
       $('state').textContent = 'Verbroken';
-      $('hint').textContent = 'Alle vluchten vertraagd, de vertraging loopt langzaam verder op.';
+      $('hint').textContent = 'Alle vluchten vertraagd. Op de toren kan nu de noodfrequentie ' + st.frequentie + ' worden ingevuld.';
     }
     requestAnimationFrame(tick);
   }

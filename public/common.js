@@ -25,9 +25,11 @@ const Airport = (() => {
     return clamp(1 - (t - state.lostAt) / state.fadeMs);
   }
 
-  // Klik = volledig scherm (voor de twee beeldschermen).
+  // Klik = volledig scherm (voor de twee beeldschermen), behalve op elementen
+  // met data-no-fullscreen, zoals het toetsenpaneel op de toren.
   function fullscreenOnClick() {
-    document.addEventListener('click', () => {
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-no-fullscreen]')) return;
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen().catch(() => {});
     });

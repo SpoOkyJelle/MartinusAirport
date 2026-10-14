@@ -9,6 +9,10 @@ const { exec } = require('child_process');
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, 'public');
 
+// De noodfrequentie die de kinderen op het torenscherm moeten invullen om de
+// verbinding te herstellen. Altijd drie cijfers, een punt en drie cijfers.
+const NOODFREQUENTIE = '121.500';
+
 const PAGES = { '/': 'dashboard.html', '/toren': 'toren.html', '/vluchten': 'vluchten.html' };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
 
@@ -36,12 +40,17 @@ function lanUrls() {
 function message() {
   const screens = { toren: 0, vluchten: 0, dashboard: 0 };
   for (const c of clients) if (c.role in screens) screens[c.role]++;
-  return `data: ${JSON.stringify({ ...state, now: Date.now(), screens, urls: lanUrls() })}\n\n`;
+  return `data: ${JSON.stringify({ ...state, now: Date.now(), screens, urls: lanUrls(), frequentie: NOODFREQUENTIE })}\n\n`;
 }
 
 function broadcast() {
   const msg = message();
   for (const c of clients) c.res.write(msg);
+}
+
+function restore() {
+  if (!state.connected) { state.connected = true; state.lostAt = null; state.restoredAt = Date.now(); }
+  broadcast();
 }
 
 function readJson(req) {
@@ -75,9 +84,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/herstel') {
-    if (!state.connected) { state.connected = true; state.lostAt = null; state.restoredAt = Date.now(); }
-    broadcast();
+    restore();
     res.writeHead(204).end();
+    return;
+  }
+
+  // Het torenscherm stuurt de ingevulde noodfrequentie; is die goed, dan is de verbinding terug.
+  if (req.method === 'POST' && url.pathname === '/api/frequentie') {
+    const body = await readJson(req);
+    const digits = (v) => String(v || '').replace(/\D/g, '');
+    const ok = !state.connected && digits(body.frequentie) === digits(NOODFREQUENTIE);
+    if (ok) restore();
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok }));
     return;
   }
 
@@ -104,6 +122,7 @@ server.listen(PORT, () => {
     console.log('\n  Vanaf een ander apparaat op hetzelfde netwerk:');
     for (const u of lan) console.log(`    ${u}/   ${u}/toren   ${u}/vluchten`);
   }
+  console.log(`\n  Noodfrequentie: ${NOODFREQUENTIE} MHz`);
   console.log('\n  Stoppen: Ctrl+C\n');
   if (process.argv.includes('--open')) exec(`start "" ${local}/`);
 });
